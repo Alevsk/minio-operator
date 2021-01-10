@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/yaml"
 
-	miniov1 "github.com/minio/operator/pkg/apis/minio.min.io/v1"
+	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
 	operatorv1 "github.com/minio/operator/pkg/client/clientset/versioned"
 	"github.com/spf13/cobra"
 )
@@ -127,7 +127,7 @@ func (v *expandCmd) run() error {
 	return nil
 }
 
-func addPoolToTenant(client *operatorv1.Clientset, t *miniov1.Tenant) error {
+func addPoolToTenant(client *operatorv1.Clientset, t *miniov2.Tenant) error {
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err

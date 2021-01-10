@@ -60,7 +60,7 @@ func TestTemplateVariables(t *testing.T) {
 	mt := Tenant{
 		ObjectMeta: metav1.ObjectMeta{Name: "test"},
 		Spec: TenantSpec{
-			Pools: []Pool{
+			Zones: []Zone{
 				{
 					Name:                "single",
 					Servers:             int32(servers),
@@ -78,7 +78,7 @@ func TestTemplateVariables(t *testing.T) {
 
 	t.Run("StatefulSet", func(t *testing.T) {
 		hosts := mt.TemplatedMinIOHosts("{{.StatefulSet}}")
-		assert.Contains(t, hosts, mt.MinIOStatefulSetNameForPool(&mt.Spec.Pools[0]))
+		assert.Contains(t, hosts, mt.MinIOStatefulSetNameForZone(&mt.Spec.Zones[0]))
 	})
 
 	t.Run("CIService", func(t *testing.T) {
@@ -98,7 +98,7 @@ func TestTemplateVariables(t *testing.T) {
 
 	t.Run("Domain", func(t *testing.T) {
 		hosts := mt.TemplatedMinIOHosts("{{.Domain}}")
-		assert.Contains(t, hosts, GetClusterDomain())
+		assert.Contains(t, hosts, ClusterDomain)
 	})
 }
 
@@ -110,6 +110,7 @@ func TestTenant_KESServiceEndpoint(t1 *testing.T) {
 		Spec       TenantSpec
 		Status     TenantStatus
 	}
+	ClusterDomain = "cluster.local"
 	autoCertEnabled := true
 	tests := []struct {
 		name   string

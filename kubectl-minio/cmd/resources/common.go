@@ -20,7 +20,7 @@ package resources
 
 import (
 	helpers "github.com/minio/kubectl-minio/cmd/helpers"
-	miniov1 "github.com/minio/operator/pkg/apis/minio.min.io/v1"
+	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,8 +33,8 @@ func tenantStorage(q resource.Quantity) v1.ResourceList {
 }
 
 // Pool returns a Pool object from given values
-func Pool(servers, volumes int32, q resource.Quantity, sc string) miniov1.Pool {
-	return miniov1.Pool{
+func Pool(servers, volumes int32, q resource.Quantity, sc string) miniov2.Pool {
+	return miniov2.Pool{
 		Servers:          servers,
 		VolumesPerServer: volumes,
 		VolumeClaimTemplate: &v1.PersistentVolumeClaim{
