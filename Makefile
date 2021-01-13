@@ -54,7 +54,7 @@ clean:
 
 regen-crd:
 	@GO111MODULE=on go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1
-	@controller-gen crd:trivialVersions=true paths="./..." output:crd:artifacts:config=$(KUSTOMIZE_CRDS)
+	@controller-gen crd:maxDescLen=0 paths="./..." output:crd:artifacts:config=$(KUSTOMIZE_CRDS)
 
 statik:
 	@echo "Building static assets"
