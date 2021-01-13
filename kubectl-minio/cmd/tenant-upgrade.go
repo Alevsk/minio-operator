@@ -108,7 +108,7 @@ func (u *upgradeCmd) run() error {
 		return fmt.Errorf("Unsupported release tag, unable to apply requested update %w", err)
 	}
 
-	t, err := client.MinioV1().Tenants(u.tenantOpts.NS).Get(context.Background(), u.tenantOpts.Name, v1.GetOptions{})
+	t, err := client.MinioV2().Tenants(u.tenantOpts.NS).Get(context.Background(), u.tenantOpts.Name, v1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (u *upgradeCmd) run() error {
 func (u *upgradeCmd) upgradeTenant(client *operatorv1.Clientset, t *miniov2.Tenant, c, p string) error {
 	if helpers.Ask(fmt.Sprintf("Upgrade is a one way process. Are you sure to upgrade Tenant '%s/%s' from version %s to %s?", t.ObjectMeta.Name, t.ObjectMeta.Namespace, c, p)) {
 		fmt.Printf(color.Bold(fmt.Sprintf("\nUpgrading Tenant '%s/%s'\n\n", t.ObjectMeta.Name, t.ObjectMeta.Namespace)))
-		if _, err := client.MinioV1().Tenants(t.Namespace).Update(context.Background(), t, v1.UpdateOptions{}); err != nil {
+		if _, err := client.MinioV2().Tenants(t.Namespace).Update(context.Background(), t, v1.UpdateOptions{}); err != nil {
 			return err
 		}
 	} else {

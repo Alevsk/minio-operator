@@ -155,7 +155,7 @@ func createTenant(oclient *operatorv1.Clientset, kclient *kubernetes.Clientset, 
 	if _, err := kclient.CoreV1().Secrets(t.Namespace).Create(context.Background(), console, metav1.CreateOptions{}); err != nil {
 		return err
 	}
-	to, err := oclient.MinioV1().Tenants(t.Namespace).Create(context.Background(), t, v1.CreateOptions{})
+	to, err := oclient.MinioV2().Tenants(t.Namespace).Create(context.Background(), t, v1.CreateOptions{})
 	if err != nil {
 		return err
 	}

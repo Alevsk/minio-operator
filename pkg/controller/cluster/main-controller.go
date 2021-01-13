@@ -25,10 +25,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -74,7 +74,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
-	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
 	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
 	clientset "github.com/minio/operator/pkg/client/clientset/versioned"
@@ -368,158 +367,6 @@ func (c *Controller) applyOperatorWebhookSecret(ctx context.Context, tenant *min
 	return secret, nil
 }
 
-// Supported remote envs
-const (
-	envMinIOArgs          = "MINIO_ARGS"
-	envMinIOServiceTarget = "MINIO_DNS_WEBHOOK_ENDPOINT"
-	updatePath            = "/tmp" + miniov2.WebhookAPIUpdate + slashSeparator
-)
-
-// BucketSrvHandler - POST /webhook/v1/bucketsrv/{namespace}/{name}?bucket={bucket}
-func (c *Controller) BucketSrvHandler(w http.ResponseWriter, r *http.Request) {
-
-	vars := mux.Vars(r)
-	v := r.URL.Query()
-
-	namespace := vars["namespace"]
-	bucket := vars["bucket"]
-	name := vars["name"]
-	deleteBucket := v.Get("delete")
-
-	secret, err := c.kubeClientSet.CoreV1().Secrets(namespace).Get(r.Context(),
-		miniov2.WebhookSecret, metav1.GetOptions{})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-	if err = c.validateRequest(r, secret); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-
-	ok, err := strconv.ParseBool(deleteBucket)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-	if ok {
-		if err = c.kubeClientSet.CoreV1().Services(namespace).Delete(r.Context(), bucket, metav1.DeleteOptions{}); err != nil {
-			klog.Errorf("failed to delete service:%s for tenant:%s/%s, err:%s", name, namespace, name, err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		return
-	}
-
-	// Find the tenant
-	tenant, err := c.tenantsLister.Tenants(namespace).Get(name)
-	if err != nil {
-		klog.Errorf("Unable to lookup tenant:%s/%s for the bucket:%s request. err:%s", namespace, name, bucket, err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	tenant.EnsureDefaults()
-
-	// Validate the MinIO Tenant
-	if err = tenant.Validate(); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-	ok, error := validateBucketName(bucket)
-	if !ok {
-		http.Error(w, error.Error(), http.StatusBadRequest)
-		return
-	}
-	// Create the service for the bucket name
-	service := services.ServiceForBucket(tenant, bucket)
-	_, err = c.kubeClientSet.CoreV1().Services(namespace).Create(r.Context(), service, metav1.CreateOptions{})
-	if err != nil && k8serrors.IsAlreadyExists(err) {
-		klog.Infof("Bucket:%s already exists for tenant:%s/%s err:%s ", bucket, namespace, name, err)
-		// This might be a previously failed bucket creation. The service is expected to the be the same as the one
-		// already in place so clear the error.
-		err = nil
-	}
-	if err != nil {
-		klog.Errorf("Unable to create service for tenant:%s/%s for the bucket:%s request. err:%s", namespace, name, bucket, err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-}
-
-func validateBucketName(bucket string) (bool, error) {
-	// Additional check on top of existing checks done by minio due to limitation of service creation in k8s
-	if strings.Contains(bucket, ".") {
-		return false, fmt.Errorf("invalid bucket name: . in bucket name: %s", bucket)
-	}
-	return true, nil
-}
-
-// GetenvHandler - GET /webhook/v1/getenv/{namespace}/{name}?key={env}
-func (c *Controller) GetenvHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	namespace := vars["namespace"]
-	name := vars["name"]
-	key := vars["key"]
-
-	secret, err := c.kubeClientSet.CoreV1().Secrets(namespace).Get(r.Context(),
-		miniov2.WebhookSecret, metav1.GetOptions{})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-
-	if err = c.validateRequest(r, secret); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-
-	// Get the Tenant resource with this namespace/name
-	tenant, err := c.tenantsLister.Tenants(namespace).Get(name)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			// The Tenant resource may no longer exist, in which case we stop processing.
-			http.Error(w, fmt.Sprintf("Tenant '%s' in work queue no longer exists", key), http.StatusNotFound)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-
-	tenant.EnsureDefaults()
-
-	// Validate the MinIO Tenant
-	if err = tenant.Validate(); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-
-	switch key {
-	case envMinIOArgs:
-		args := strings.Join(statefulsets.GetContainerArgs(tenant, c.hostsTemplate), " ")
-		klog.Infof("%s value is %s", key, args)
-
-		_, _ = w.Write([]byte(args))
-		w.(http.Flusher).Flush()
-	case envMinIOServiceTarget:
-		target := fmt.Sprintf("%s://%s:%s%s/%s/%s",
-			"http",
-			fmt.Sprintf("operator.%s.svc.%s",
-				miniov2.GetNSFromFile(),
-				miniov2.GetClusterDomain()),
-			miniov2.WebhookDefaultPort,
-			miniov2.WebhookAPIBucketService,
-			tenant.Namespace,
-			tenant.Name)
-		klog.Infof("%s value is %s", key, target)
-
-		_, _ = w.Write([]byte(target))
-	default:
-		http.Error(w, fmt.Sprintf("%s env key is not supported yet", key), http.StatusBadRequest)
-		return
-	}
-}
-
 func (c *Controller) fetchTag(path string) (string, error) {
 	cmd := exec.Command(path, "--version")
 	var out bytes.Buffer
@@ -699,6 +546,39 @@ func (c *Controller) removeArtifacts() error {
 // workers to finish processing their current work items.
 func (c *Controller) Start(threadiness int, stopCh <-chan struct{}) error {
 	go func() {
+		xTemp := 1
+		yTemp := 2
+
+		// retrieve TLS certificates
+
+		// 1.- Do I have certificated mounted locally at /operator/certs?
+		if xTemp == yTemp {
+			// use those certificates to configure the web server
+		} else {
+			// we will request the certificates for operator via CSR
+
+			ctx := context.Background()
+
+			for {
+
+				if _, err := c.certClient.CertificateSigningRequests().Get(ctx, "operator-auto-tls", metav1.GetOptions{}); err != nil {
+					if k8serrors.IsNotFound(err) {
+						klog.V(2).Infof("Creating a new Certificate Signing Request for Operator Server Certs")
+						if err = c.createOperatorTLSCSR(ctx); err != nil {
+							return err
+						}
+						// we want to re-queue this tenant so we can re-check for the console certificate
+						return errors.New("waiting for console cert")
+					}
+					return err
+				}
+
+				time.Sleep(time.Second * 10)
+				log.Println("Waiting for the certificates to be issued")
+			}
+
+		}
+
 		if err := c.ws.ListenAndServe(); err != http.ErrServerClosed {
 			klog.Infof("HTTP server ListenAndServe: %v", err)
 			return

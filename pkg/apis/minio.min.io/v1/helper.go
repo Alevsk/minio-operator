@@ -37,6 +37,8 @@ import (
 	"text/template"
 	"time"
 
+	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
+
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -289,7 +291,7 @@ func (t *Tenant) EnsureDefaults() *Tenant {
 				t.Spec.CertConfig.OrganizationName = DefaultOrgName
 			}
 		} else {
-			t.Spec.CertConfig = &CertificateConfig{
+			t.Spec.CertConfig = &miniov2.CertificateConfig{
 				CommonName:       t.MinIOWildCardName(),
 				DNSNames:         t.MinIOHosts(),
 				OrganizationName: DefaultOrgName,

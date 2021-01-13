@@ -50,6 +50,12 @@ func configureWebhookServer(c *Controller) *http.Server {
 	router.Methods(http.MethodGet).
 		PathPrefix(miniov2.WebhookAPIUpdate).
 		Handler(http.StripPrefix(miniov2.WebhookAPIUpdate, http.FileServer(http.Dir(updatePath))))
+	// CRD Conversion
+	router.Methods(http.MethodPost).
+		Path(miniov2.WebhookCRDConversaion).
+		HandlerFunc(c.CRDConversionHandler)
+	//.
+	//		Queries(restQueries("bucket")...)
 
 	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(r)

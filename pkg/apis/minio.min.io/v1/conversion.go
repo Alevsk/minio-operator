@@ -30,11 +30,7 @@ interface.  Namely, they'll need `ConvertTo` and `ConvertFrom` methods to conver
 the hub version.
 */
 
-/*
-ConvertTo is expected to modify its argument to contain the converted object.
-Most of the conversion is straightforward copying, except for converting our changed field.
-*/
-// ConvertTo converts this CronJob to the Hub version (v1).
+// ConvertTo converts this v1.Tenant to the Hub version (v2).
 func (src *Tenant) ConvertTo(dstRaw conversion.Hub) error {
 	dst := dstRaw.(*v2.Tenant)
 
@@ -94,13 +90,8 @@ func (src *Tenant) ConvertTo(dstRaw conversion.Hub) error {
 	return nil
 }
 
-/*
-ConvertFrom is expected to modify its receiver to contain the converted object.
-Most of the conversion is straightforward copying, except for converting our changed field.
-*/
-
-// ConvertFrom converts from the Hub version (v1) to this version.
-func (dst *Tenant) ConvertFrom(srcRaw conversion.Hub) error {
+// ConvertFrom converts from the Hub version (v2) to this version.
+func (dst *Tenant) ConvertFrom(srcRaw conversion.Hub) error { //nolint
 	src := srcRaw.(*v2.Tenant)
 
 	var zones []Zone

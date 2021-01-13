@@ -3,6 +3,8 @@ package v1
 import (
 	"testing"
 
+	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
+
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/stretchr/testify/assert"
@@ -106,9 +108,9 @@ func TestTenant_KESServiceEndpoint(t1 *testing.T) {
 	type fields struct {
 		TypeMeta   metav1.TypeMeta
 		ObjectMeta metav1.ObjectMeta
-		Scheduler  TenantScheduler
+		Scheduler  miniov2.TenantScheduler
 		Spec       TenantSpec
-		Status     TenantStatus
+		Status     miniov2.TenantStatus
 	}
 	ClusterDomain = "cluster.local"
 	autoCertEnabled := true

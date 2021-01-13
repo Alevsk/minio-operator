@@ -88,7 +88,7 @@ func (d *infoCmd) run(args []string) error {
 		return err
 	}
 
-	tenant, err := oclient.MinioV1().Tenants(d.ns).Get(context.Background(), args[0], metav1.GetOptions{})
+	tenant, err := oclient.MinioV2().Tenants(d.ns).Get(context.Background(), args[0], metav1.GetOptions{})
 	if err != nil {
 		return err
 	}

@@ -101,7 +101,7 @@ func (v *expandCmd) run() error {
 		return err
 	}
 
-	t, err := client.MinioV1().Tenants(v.tenantOpts.NS).Get(context.Background(), v.tenantOpts.Name, metav1.GetOptions{})
+	t, err := client.MinioV2().Tenants(v.tenantOpts.NS).Get(context.Background(), v.tenantOpts.Name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func addPoolToTenant(client *operatorv1.Clientset, t *miniov2.Tenant) error {
 	if err != nil {
 		return err
 	}
-	if _, err := client.MinioV1().Tenants(t.Namespace).Patch(context.Background(), t.Name, types.MergePatchType, data, metav1.PatchOptions{FieldManager: "kubectl"}); err != nil {
+	if _, err := client.MinioV2().Tenants(t.Namespace).Patch(context.Background(), t.Name, types.MergePatchType, data, metav1.PatchOptions{FieldManager: "kubectl"}); err != nil {
 		return err
 	}
 	return nil

@@ -151,7 +151,7 @@ func (c *Controller) createCSR(ctx context.Context, tenant *miniov2.Tenant) erro
 }
 
 // createCertificate is equivalent to kubectl create <csr-name> and kubectl approve csr <csr-name>
-func (c *Controller) createCertificate(ctx context.Context, labels map[string]string, name, namespace string, csrBytes []byte, tenant *miniov2.Tenant) error {
+func (c *Controller) createCertificate(ctx context.Context, labels map[string]string, name, namespace string, csrBytes []byte, owner metav1.Object) error {
 	encodedBytes := pem.EncodeToMemory(&pem.Block{Type: csrType, Bytes: csrBytes})
 
 	kubeCSR := &certificates.CertificateSigningRequest{
@@ -164,7 +164,7 @@ func (c *Controller) createCertificate(ctx context.Context, labels map[string]st
 			Labels:    labels,
 			Namespace: namespace,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(tenant, schema.GroupVersionKind{
+				*metav1.NewControllerRef(owner, schema.GroupVersionKind{
 					Group:   miniov2.SchemeGroupVersion.Group,
 					Version: miniov2.SchemeGroupVersion.Version,
 					Kind:    miniov2.MinIOCRDResourceKind,
