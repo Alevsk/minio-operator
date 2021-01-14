@@ -23,6 +23,9 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
 	"k8s.io/klog/v2"
@@ -60,40 +63,62 @@ func generateOperatorCryptoData() ([]byte, []byte, error) {
 	return privKeyBytes, csrBytes, nil
 }
 
-// createConsoleTLSCSR handles all the steps required to create the CSR: from creation of keys, submitting CSR and
-// finally creating a secret that Console deployment will use to mount private key and certificate for TLS
+func (c *Controller) createOperatorTLSSecret(ctx context.Context, operator metav1.Object, labels map[string]string, secretName string, pkBytes, certBytes []byte) error {
+	secret := &corev1.Secret{
+		Type: "Opaque",
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: miniov2.GetNSFromFile(),
+			Labels:    labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(operator, schema.GroupVersionKind{
+					Group:   miniov2.SchemeGroupVersion.Group,
+					Version: miniov2.SchemeGroupVersion.Version,
+					Kind:    miniov2.OperatorCRDResourceKind,
+				}),
+			},
+		},
+		Data: map[string][]byte{
+			"private.key": pkBytes,
+			"public.crt":  certBytes,
+		},
+	}
+	_, err := c.kubeClientSet.CoreV1().Secrets(miniov2.GetNSFromFile()).Create(ctx, secret, metav1.CreateOptions{})
+	return err
+}
+
+// createOperatorTLSCSR handles all the steps required to create the CSR: from creation of keys, submitting CSR and
+// finally creating a secret that Operator deployment will use to mount private key and certificate for TLS
 // This Method Blocks till the CSR Request is approved via kubectl approve
-func (c *Controller) createOperatorTLSCSR(ctx context.Context, tenant *miniov2.Tenant) error {
+func (c *Controller) createOperatorTLSCSR(ctx context.Context, operator metav1.Object) error {
 	privKeysBytes, csrBytes, err := generateOperatorCryptoData()
 	if err != nil {
 		klog.Errorf("Private Key and CSR generation failed with error: %v", err)
 		return err
 	}
-
-	ns := miniov2.GetNSFromFile()
-
-	err = c.createCertificate(ctx, tenant.ConsolePodLabels(), tenant.ConsoleCSRName(), ns, csrBytes, tenant)
+	namespace := miniov2.GetNSFromFile()
+	operatorCSRName := fmt.Sprintf("operator-%s-csr", namespace)
+	err = c.createCertificate(ctx, map[string]string{}, operatorCSRName, namespace, csrBytes, operator)
 	if err != nil {
-		klog.Errorf("Unexpected error during the creation of the csr/%s: %v", tenant.ConsoleCSRName(), err)
+		klog.Errorf("Unexpected error during the creation of the csr/%s: %v", operatorCSRName, err)
 		return err
 	}
 
 	// fetch certificate from CSR
-	certbytes, err := c.fetchCertificate(ctx, tenant.ConsoleCSRName())
+	certBytes, err := c.fetchCertificate(ctx, operatorCSRName)
 	if err != nil {
-		klog.Errorf("Unexpected error during the creation of the csr/%s: %v", tenant.ConsoleCSRName(), err)
+		klog.Errorf("Unexpected error during the creation of the csr/%s: %v", operatorCSRName, err)
 		return err
 	}
 
 	// PEM encode private ECDSA key
 	encodedPrivKey := pem.EncodeToMemory(&pem.Block{Type: privateKeyType, Bytes: privKeysBytes})
 
-	// Create secret for Console Deployment to use
-	err = c.createSecret(ctx, tenant, tenant.ConsolePodLabels(), tenant.ConsoleTLSSecretName(), encodedPrivKey, certbytes)
+	// Create secret for operator to use
+	err = c.createOperatorTLSSecret(ctx, operator, map[string]string{}, "operator-tls", encodedPrivKey, certBytes)
 	if err != nil {
-		klog.Errorf("Unexpected error during the creation of the secret/%s: %v", tenant.ConsoleTLSSecretName(), err)
+		klog.Errorf("Unexpected error during the creation of the secret/%s: %v", "operator-tls", err)
 		return err
 	}
-
 	return nil
 }

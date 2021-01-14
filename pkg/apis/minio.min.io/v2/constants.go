@@ -29,6 +29,9 @@ import (
 // MinIOCRDResourceKind is the Kind of a Cluster.
 const MinIOCRDResourceKind = "Tenant"
 
+// OperatorCRDResourceKind is the Kind of a Cluster.
+const OperatorCRDResourceKind = "Operator"
+
 // DefaultPodManagementPolicy specifies default pod management policy as expllained here
 // https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#pod-management-policies
 const DefaultPodManagementPolicy = appsv1.ParallelPodManagement

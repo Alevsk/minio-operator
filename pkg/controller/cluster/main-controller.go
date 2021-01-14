@@ -25,6 +25,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/kubectl-minio/cmd/helpers"
+	"github.com/minio/minio/pkg/env"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -540,49 +543,76 @@ func (c *Controller) removeArtifacts() error {
 	return os.RemoveAll(updatePath)
 }
 
+var operatorTLSSecretName = "operator-tls"
+
+func (c *Controller) checkAndCreateOperatorCSR(ctx context.Context, operator metav1.Object) error {
+	if _, err := c.certClient.CertificateSigningRequests().Get(ctx, "operator-auto-tls", metav1.GetOptions{}); err != nil {
+		if k8serrors.IsNotFound(err) {
+			klog.V(2).Infof("Creating a new Certificate Signing Request for Operator Server Certs, cluster %q")
+			if err = c.createOperatorTLSCSR(ctx, operator); err != nil {
+				return err
+			}
+			return errors.New("waiting for Operator cert")
+		}
+		return err
+	}
+	return nil
+}
+
 // Start will set up the event handlers for types we are interested in, as well
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
 func (c *Controller) Start(threadiness int, stopCh <-chan struct{}) error {
 	go func() {
-		xTemp := 1
-		yTemp := 2
-
-		// retrieve TLS certificates
-
-		// 1.- Do I have certificated mounted locally at /operator/certs?
-		if xTemp == yTemp {
-			// use those certificates to configure the web server
-		} else {
+		ctx := context.Background()
+		namespace := miniov2.GetNSFromFile()
+		// operator deployment for owner reference
+		operatorDeployment, err := c.kubeClientSet.AppsV1().Deployments(namespace).Get(ctx, "minio-operator", metav1.GetOptions{})
+		if err != nil {
+			panic(err)
+		}
+		// operator TLS certificates
+		operatorTLSCert, err := c.kubeClientSet.CoreV1().Secrets(namespace).Get(ctx,operatorTLSSecretName, metav1.GetOptions{})
+		if err != nil {
+			panic(err)
+		}
+		if operatorTLSCert == nil {
 			// we will request the certificates for operator via CSR
-
-			ctx := context.Background()
-
 			for {
-
-				if _, err := c.certClient.CertificateSigningRequests().Get(ctx, "operator-auto-tls", metav1.GetOptions{}); err != nil {
-					if k8serrors.IsNotFound(err) {
-						klog.V(2).Infof("Creating a new Certificate Signing Request for Operator Server Certs")
-						if err = c.createOperatorTLSCSR(ctx); err != nil {
-							return err
-						}
-						// we want to re-queue this tenant so we can re-check for the console certificate
-						return errors.New("waiting for console cert")
-					}
-					return err
+				if err = c.checkAndCreateOperatorCSR(ctx, operatorDeployment); err != nil {
+					break
 				}
-
 				time.Sleep(time.Second * 10)
-				log.Println("Waiting for the certificates to be issued")
+				log.Println("Waiting for the operator certificates to be issued")
 			}
-
+			// if we break the loop that means the certificates were issued correctly
+			// Trying to retrieve operator TLS certificates once more
+			operatorTLSCert, err = c.kubeClientSet.CoreV1().Secrets(namespace).Get(ctx,operatorTLSSecretName, metav1.GetOptions{})
+			if err != nil {
+				panic(err)
+			}
 		}
-
-		if err := c.ws.ListenAndServe(); err != http.ErrServerClosed {
-			klog.Infof("HTTP server ListenAndServe: %v", err)
-			return
+		if operatorTLSCert != nil {
+			var tlsCrt []byte
+			var tlsKey []byte
+			if val, ok := operatorTLSCert.Data["tls.crt"]; ok {
+				tlsCrt = val
+			}
+			if val, ok := operatorTLSCert.Data["tls.key"]; ok {
+				tlsKey = val
+			}
+			if  tlsCrt != nil || tlsKey != nil {
+				panic(errors.New("malformed operator-tls secret"))
+			}
+			// use those certificates to configure the web server
+			if err := c.ws.ListenAndServeTLS(string(tlsCrt), string(tlsKey)); err != http.ErrServerClosed {
+				klog.Infof("HTTPS server ListenAndServeTLS: %v", err)
+				return
+			}
 		}
+		klog.Infof("Failed to start HTTPS server")
+		return
 	}()
 
 	// Start the informer factories to begin populating the informer caches
