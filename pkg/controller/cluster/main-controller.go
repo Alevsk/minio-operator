@@ -790,7 +790,14 @@ func (c *Controller) syncHandler(key string) error {
 			// otherwise AutoCert will be false
 			tenantCSR, err := c.certClient.CertificateSigningRequests().Get(ctx, tenant.MinIOCSRName(), metav1.GetOptions{})
 			if err != nil || tenantCSR == nil {
-				autoCertEnabled = false
+				// In some scenarios certificate signing request is deleted by k8s
+				// Additional verification to check if TLS secret with predecible name exists, if the secret exists
+				// it's safe to assume the Tenant was deployed with AutoCert: true
+				tenantTLSSecret, err := c.kubeClientSet.CoreV1().Secrets(tenant.Namespace).Get(ctx, tenant.MinIOTLSSecretName(), metav1.GetOptions{})
+				if err != nil || tenantTLSSecret == nil {
+					klog.V(2).Infof(err.Error())
+					autoCertEnabled = false
+				}
 			}
 		} else {
 			autoCertEnabled = tenant.AutoCert()
