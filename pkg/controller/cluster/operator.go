@@ -116,7 +116,7 @@ func (c *Controller) createOperatorTLSCSR(ctx context.Context, operator metav1.O
 	// fetch certificate from CSR
 	certBytes, err := c.fetchCertificate(ctx, operatorCSRName)
 	if err != nil {
-		klog.Errorf("Unexpected error during fetching certificate CSR csr/%s: %v", operatorCSRName, err)
+		klog.Errorf("Unexpected error during the creation of the csr/%s: %v", operatorCSRName, err)
 		return err
 	}
 
