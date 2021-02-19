@@ -292,6 +292,10 @@ func (t *Tenant) EnsureDefaults() *Tenant {
 		t.Spec.PodManagementPolicy = DefaultPodManagementPolicy
 	}
 
+	if t.Spec.Users == nil {
+		t.Spec.Users = []corev1.LocalObjectReference{}
+	}
+
 	if t.Spec.Image == "" {
 		t.Spec.Image = DefaultMinIOImage
 	}
